@@ -13,7 +13,6 @@ import java.util.stream.Stream;
 
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
-import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.wurstclient.Category;
@@ -26,6 +25,7 @@ import net.wurstclient.events.RenderListener;
 import net.wurstclient.events.UpdateListener;
 import net.wurstclient.hack.DontSaveState;
 import net.wurstclient.hack.Hack;
+import net.wurstclient.mixinterface.IKeyBinding;
 import net.wurstclient.settings.AttackSpeedSliderSetting;
 import net.wurstclient.settings.CheckboxSetting;
 import net.wurstclient.settings.PauseAttackOnContainersSetting;
@@ -86,21 +86,9 @@ public final class FightBotHack extends Hack
 	@Override
 	protected void onEnable()
 	{
-		// disable other killauras
-		WURST.getHax().aimAssistHack.setEnabled(false);
-		WURST.getHax().clickAuraHack.setEnabled(false);
-		WURST.getHax().crystalAuraHack.setEnabled(false);
-		WURST.getHax().killauraLegitHack.setEnabled(false);
-		WURST.getHax().killauraHack.setEnabled(false);
-		WURST.getHax().multiAuraHack.setEnabled(false);
-		WURST.getHax().protectHack.setEnabled(false);
-		WURST.getHax().triggerBotHack.setEnabled(false);
-		WURST.getHax().tpAuraHack.setEnabled(false);
-		WURST.getHax().tunnellerHack.setEnabled(false);
-		
 		pathFinder = new EntityPathFinder(MC.player);
-		
 		speed.resetTimer();
+		MC.options.useKey.setPressed(true);
 		EVENTS.add(UpdateListener.class, this);
 		EVENTS.add(RenderListener.class, this);
 	}
@@ -108,9 +96,9 @@ public final class FightBotHack extends Hack
 	@Override
 	protected void onDisable()
 	{
-		// remove listener
 		EVENTS.remove(UpdateListener.class, this);
 		EVENTS.remove(RenderListener.class, this);
+		IKeyBinding.get(MC.options.useKey).resetPressedState();
 		
 		pathFinder = null;
 		processor = null;
@@ -118,15 +106,50 @@ public final class FightBotHack extends Hack
 		PathProcessor.releaseControls();
 	}
 	
+	private long skyblockCooldownStart = 0;
+	private long gardenCooldownStart = 0;
+	private final int cooldown = 5000;
+	private boolean skyblockOnCooldown = false;
+	private boolean gardenOnCooldown = false;
+	
 	@Override
 	public void onUpdate()
 	{
+		if(MC.player == null)
+			return;
+		MC.options.useKey.setPressed(true);
+		
+		long now = System.currentTimeMillis();
+		int x = MC.player.getBlockX();
+		int y = MC.player.getBlockY();
+		int z = MC.player.getBlockZ();
+		
+		int randomExtra = (int)(Math.random() * 901) + 100;
+		if(skyblockOnCooldown
+			&& now - skyblockCooldownStart >= cooldown + randomExtra)
+			skyblockOnCooldown = false;
+		
+		int randomExtra2 = (int)(Math.random() * 901) + 100;
+		if(gardenOnCooldown
+			&& now - gardenCooldownStart >= cooldown + randomExtra2)
+			gardenOnCooldown = false;
+		if(y == 75 && !skyblockOnCooldown && x != 48 && z != -47)
+		{
+			MC.player.networkHandler.sendChatCommand("skyblock");
+			skyblockOnCooldown = true;
+			skyblockCooldownStart = now;
+		}else if(y == 70 && !gardenOnCooldown && x != 48 && z != -47)
+		{
+			MC.player.networkHandler.sendChatCommand("warp garden");
+			gardenOnCooldown = true;
+			gardenCooldownStart = now;
+		}
+		
 		speed.updateTimer();
 		
 		if(pauseOnContainers.shouldPause())
 			return;
 		
-		// set entity
 		Stream<Entity> stream = EntityUtils.getAttackableEntities();
 		stream = entityFilters.applyTo(stream);
 		
@@ -137,11 +160,8 @@ public final class FightBotHack extends Hack
 		if(entity == null)
 			return;
 		
-		WURST.getHax().autoSwordHack.setSlot(entity);
-		
 		if(useAi.isChecked())
 		{
-			// reset pathfinder
 			if((processor == null || processor.isDone() || ticksProcessing >= 10
 				|| !pathFinder.isPathStillValid(processor.getIndex()))
 				&& (pathFinder.isDone() || pathFinder.isFailed()))
@@ -151,7 +171,6 @@ public final class FightBotHack extends Hack
 				ticksProcessing = 0;
 			}
 			
-			// find path
 			if(!pathFinder.isDone() && !pathFinder.isFailed())
 			{
 				PathProcessor.lockControls();
@@ -162,7 +181,6 @@ public final class FightBotHack extends Hack
 				processor = pathFinder.getProcessor();
 			}
 			
-			// process path
 			if(!processor.isDone())
 			{
 				processor.process();
@@ -170,18 +188,13 @@ public final class FightBotHack extends Hack
 			}
 		}else
 		{
-			// jump if necessary
 			if(MC.player.horizontalCollision && MC.player.isOnGround())
 				MC.player.jump();
 			
-			// swim up if necessary
 			if(MC.player.isTouchingWater() && MC.player.getY() < entity.getY())
 				MC.player.addVelocity(0, 0.04, 0);
 			
-			// control height if flying
-			if(!MC.player.isOnGround()
-				&& (MC.player.getAbilities().flying
-					|| WURST.getHax().flightHack.isEnabled())
+			if(!MC.player.isOnGround() && (MC.player.getAbilities().flying)
 				&& MC.player.squaredDistanceTo(entity.getX(), MC.player.getY(),
 					entity.getZ()) <= MC.player.squaredDistanceTo(
 						MC.player.getX(), entity.getY(), MC.player.getZ()))
@@ -196,25 +209,17 @@ public final class FightBotHack extends Hack
 				MC.options.jumpKey.setPressed(false);
 			}
 			
-			// follow entity
 			MC.options.forwardKey.setPressed(
 				MC.player.distanceTo(entity) > distance.getValueF());
 			WURST.getRotationFaker()
 				.faceVectorClient(entity.getBoundingBox().getCenter());
 		}
 		
-		// check cooldown
-		if(!speed.isTimeToAttack())
-			return;
-		
-		// check range
 		if(MC.player.squaredDistanceTo(entity) > Math.pow(range.getValue(), 2))
 			return;
 		
-		// attack entity
-		MC.interactionManager.attackEntity(MC.player, entity);
-		swingHand.swing(Hand.MAIN_HAND);
-		speed.resetTimer();
+		if(MC.player.squaredDistanceTo(entity) > Math.pow(range.getValue(), 2))
+			return;
 	}
 	
 	@Override
