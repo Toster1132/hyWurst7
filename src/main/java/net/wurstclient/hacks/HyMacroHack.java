@@ -25,17 +25,20 @@ public final class HyMacroHack extends Hack implements UpdateListener
 		SECOND,
 		THIRD,
 		FOURTH,
-		FIFTH
+		FIFTH,
+		SIXTH,
+		SEVENTH
 	}
 	
 	public static long RANDOM = (long)(Math.random() * 660L);
 	private static final long LADDER_SEC = 4_000L + RANDOM;
 	private static final long PEST_SEC = 60_000L + RANDOM;
+	private static final long WAIT_HUB = 2000L + RANDOM;
+	private static final long WAIT_STASH = 30_000L + RANDOM;
 	public static int TickCounter = 0;
 	public static long now;
 	public static long elapsed;
 	public static long stateStart;
-	
 	public static State currentState;
 	
 	public HyMacroHack()
@@ -85,7 +88,7 @@ public final class HyMacroHack extends Hack implements UpdateListener
 		if(MC.player == null)
 			return;
 		TickCounter++;
-		if(TickCounter % 40 != 0)
+		if(TickCounter % 30 != 0)
 			return;
 		now = System.currentTimeMillis();
 		elapsed = now - stateStart;
@@ -96,22 +99,47 @@ public final class HyMacroHack extends Hack implements UpdateListener
 		
 		switch(currentState)
 		{
+			
 			case FIRST:
 			{
-				actualMacro.WarpHack();
+				actualMacro.WarpHub();
 				
 				currentState = State.SECOND;
 				stateStart = now;
-				Utility.Notify("[hy] - Climbing Ladder...");
+				Utility.Notify("[hy] - Stashing...");
 			}
 			break;
 			
 			case SECOND:
 			{
+				if(elapsed >= WAIT_HUB)
+				{
+					actualMacro.StashHack();
+				}
+				if(elapsed >= WAIT_HUB + WAIT_STASH)
+				{
+					currentState = State.THIRD;
+					stateStart = now;
+					Utility.Notify("[hy] - Warping...");
+				}
+			}
+			break;
+			case THIRD:
+			{
+				actualMacro.WarpG();
+				
+				currentState = State.FOURTH;
+				stateStart = now;
+				Utility.Notify("[hy] - Climbing Ladder...");
+			}
+			break;
+			
+			case FOURTH:
+			{
 				actualMacro.LadderHack();
 				if(elapsed >= LADDER_SEC)
 				{
-					currentState = State.THIRD;
+					currentState = State.FIFTH;
 					stateStart = now;
 					Utility.Notify("[hy] - Vacumming Pests...");
 					Utility.SwapHotbarSlotsVacuum();
@@ -119,7 +147,7 @@ public final class HyMacroHack extends Hack implements UpdateListener
 			}
 			break;
 			
-			case THIRD:
+			case FIFTH:
 			{
 				fightBotHack.setEnabled(true);
 				movementHack.setEnabled(true);
@@ -128,24 +156,24 @@ public final class HyMacroHack extends Hack implements UpdateListener
 				{
 					fightBotHack.setEnabled(false);
 					movementHack.setEnabled(false);
-					currentState = State.FOURTH;
+					currentState = State.SIXTH;
 					stateStart = now;
 					Utility.Notify("[hy] - Warping...");
 				}
 			}
 			break;
 			
-			case FOURTH:
+			case SIXTH:
 			{
-				actualMacro.WarpHack();
+				actualMacro.WarpG();
 				
-				currentState = State.FIFTH;
+				currentState = State.SEVENTH;
 				stateStart = now;
 				Utility.Notify("[hy] - Farming...");
 			}
 			break;
 			
-			case FIFTH:
+			case SEVENTH:
 			{
 				Utility.SwapHotbarSlotsDicer();
 				actualMacro.FarmingHack();
